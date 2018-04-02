@@ -1,5 +1,6 @@
 import os
 import subprocess
+from glob import glob
 
 try:
     from typing import Any, List, Dict, Tuple, Callable, Optional, Set
@@ -88,10 +89,8 @@ def initialize_on_open(view: sublime.View):
     if not window:
         return
 
-    debug("initialize on open", window.id(), view.file_name())
-
-    if window_configs(window):
-        unload_old_clients(window)
+    # if window_configs(window):
+    #     unload_old_clients(window)
 
     global didopen_after_initialize
     open_after_initialize_by_window[window.id()] = []
@@ -167,6 +166,28 @@ def handle_initialize_result(result, client, window, config):
     if settings.show_status_messages:
         window.status_message("{} initialized".format(config.name))
     del open_after_initialize_by_window[window.id()]
+
+    sublime.status_message("Going to index all files")
+    debug(len(window.folders()))
+    for folder in window.folders():
+        files = [y for x in os.walk(folder) for y in glob(os.path.join(x[0], '*.php'))]
+        for file in files:
+            sublime.status_message(file)
+            try:
+                params = {
+                    "textDocument": {
+                        "uri": filename_to_uri(file),
+                        "languageId": config.languageId,
+                        "text": open(file , 'r').read(),
+                        "version":0
+                    }
+                }
+                client.send_notification(Notification.didOpen(params))
+
+            except Exception as err:
+                debug("err on file " + file)
+    sublime.status_message("Completed LSP index")
+
 
 
 def start_client(window: sublime.Window, config: ClientConfig):
